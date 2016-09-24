@@ -9,13 +9,25 @@ static Mesh *mesh = NULL;
 
 static int meshVisible = 1;
 
-static DRAWMODE drawMode = DRAWMODE::SMOOTH;
-
+// settings
+static DRAWMODE drawMode = DRAWMODE::SOLID;
+static SHADEMODE shadeMode = SHADEMODE::FLAT;
 static GLfloat drawColor[3] = { 1, 1, 1 };
+
+
+// lighting
+static int lightingEnabled = 1;
+static Light lights[LIGHTS_AVAILABLE];
+
+// buffers
 static GLfloat* vertexBuffer = NULL;
 static GLfloat* normalBuffer = NULL;
 static GLushort* indexBuffer = NULL;
-static GLint vertexCount = 0, indexCount = 0, normalCount = 0;
+static GLushort* indexEdgeBuffer = NULL;
+static GLint vertexCount = 0,
+			indexCount = 0,
+			normalCount = 0,
+			indexEdgeCount = 0;
 
 // ======================================================
 // Main Entry Point
@@ -36,15 +48,24 @@ int main(int argc, char** argv) {
 
 	// register your drawing function
 	glutDisplayFunc(onRender);
+	glutKeyboardUpFunc(onKeyUp);
 	glutReshapeFunc(onWindowResize);
 
 	// set up camera
 	camera = new Camera(viewport[0], viewport[1]);
 
-	// enter the main loop
+	// set up lights
+	for (int i = 0; i < LIGHTS_AVAILABLE; i++)
+		lights[i] = Light(GL_LIGHT0 + i);
+
+	lights[0].setEnabled(1);
+
 	loadMesh("C:/Users/user/Downloads/TestModels/TestModels/gargoyle.m");
-	
+
+
 	prevClock = clock();
+
+	// enter the main loop
 	glutMainLoop();
 	
 	return 0;
@@ -56,7 +77,7 @@ int main(int argc, char** argv) {
 void onRender(void) {
 	glClearColor(0.392f, 0.584f, 0.929f, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	
+
 	// time keeping for animation
 	clock_t nowClock = clock();
 	double elapsed = (double)(nowClock - prevClock) / CLOCKS_PER_SEC;
@@ -81,6 +102,17 @@ void onWindowResize(int width, int height) {
 	camera->viewportHeight = height;
 
 	glViewport(0, 0, width, height);
+}
+
+// ======================================================
+// Called when a key is released
+// ======================================================
+void onKeyUp(unsigned char key, int x, int y) {
+	if (key == 'R') {
+		int k = (int)drawMode;
+		k = (k + 1) % 4;
+		setDrawMode((DRAWMODE)k);
+	}
 }
 
 double angle = 0;
@@ -131,11 +163,19 @@ void drawAxes(double length) {
 static float material[13] = {
 	0.5f,0.5f,0.5f,1.0f,
 	0.5f,0.5f,0.5f,1.0f,
-	1.0f,0.0f,0.0f,1.0f,
-	10.0f
+	1.0f,1.0f,1.0f,1.0f,
+	60.0f
 };
 
-static float light[4] = { 10,10,10,0 };
+// ======================================================
+// Call this before any rendering that requires lighting
+// ======================================================
+void applyLights() {
+	if (lightingEnabled) 
+		glEnable(GL_LIGHTING);
+	else
+		glDisable(GL_LIGHTING);
+}
 
 // ======================================================
 // Draws the loaded mesh object
@@ -154,25 +194,58 @@ void drawMesh(double elapsed) {
 		break;
 
 	case WIREFRAME:
-		glDrawElements(GL_LINES, indexCount, GL_UNSIGNED_SHORT, indexBuffer);
+		glDrawElements(GL_LINES, indexEdgeCount, GL_UNSIGNED_SHORT, indexEdgeBuffer);
 		break;
 
-	case SMOOTH:
-		glEnable(GL_LIGHTING);
-		glEnable(GL_LIGHT0);
-		glShadeModel(GL_SMOOTH);
-		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, &material[0]);
-		glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, &material[4]);
+	case SOLID:
+		// set the shade model
+		glShadeModel(shadeMode == SMOOTH ? GL_SMOOTH : GL_FLAT);
+
+		glEnable(GL_COLOR_MATERIAL);
+		glColor3f(0.5f, 0.5f, 0.5f);
+
+	
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, &material[8]);
 		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, material[12]);
-		glLightfv(GL_LIGHT0, GL_POSITION, light);
+
+		// apply lighting
+		applyLights();
+
 		glEnableClientState(GL_NORMAL_ARRAY);
 		glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, indexBuffer);
 		glDisableClientState(GL_NORMAL_ARRAY);
 
-		glDisable(GL_COLOR_MATERIAL);
-		glDisable(GL_LIGHT0);
 		glDisable(GL_LIGHTING);
+		break;
+
+	case SOLID_AND_WIREFRAME:
+		// set the shade model
+		glShadeModel(shadeMode == SMOOTH ? GL_SMOOTH : GL_FLAT);
+
+		glEnable(GL_COLOR_MATERIAL);
+		glColor3f(0.5f, 0.5f, 0.5f);
+
+		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, &material[8]);
+		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, material[12]);
+
+		// apply lighting
+		applyLights();
+
+		// to make sure wireframe lines appear "above" solid
+		glEnable(GL_POLYGON_OFFSET_FILL);
+		glPolygonOffset(1.0f, 1.0f);
+
+		glEnableClientState(GL_NORMAL_ARRAY);
+		glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, indexBuffer);
+		glDisableClientState(GL_NORMAL_ARRAY);
+		glDisable(GL_LIGHTING);
+		glDisable(GL_POLYGON_OFFSET_FILL);
+
+		// now draw the frame
+		glColor3f(0, 0.85f, 0);
+		glLineWidth(0.4f);
+		glDrawElements(GL_LINES, indexEdgeCount, GL_UNSIGNED_SHORT, indexEdgeBuffer);
+		glLineWidth(1.0f);
 		break;
 	}
 
@@ -204,7 +277,7 @@ void loadMesh(const char* filename) {
 
 	delete file;
 
-	setDrawMode(SMOOTH);
+	setDrawMode(SOLID_AND_WIREFRAME);
 }
 
 // ======================================================
@@ -234,85 +307,96 @@ void setDrawMode(DRAWMODE newDrawMode) {
 
 	drawMode = newDrawMode;
 
-	clearBuffers();
-
 	if (mesh == NULL)
 		return;
 
-	// create the vertex buffer
-	vertexCount = mesh->getVertexCount();
-	vertexBuffer = new GLfloat[vertexCount * 3];
+	// create the vertex buffer, if not already
+	if (!vertexBuffer) {
+		printf("Building the vertex buffer...\n");
 
-	// transfer vertex data
-	for (i = 0; i < vertexCount; i++){
-		tempVertex = mesh->getVertex(i)->position;
-		vertexBuffer[i * 3] = tempVertex->x;
-		vertexBuffer[i * 3 + 1] = tempVertex->y;
-		vertexBuffer[i * 3 + 2] = tempVertex->z;
+		vertexCount = mesh->getVertexCount();
+		vertexBuffer = new GLfloat[vertexCount * 3];
+
+		// transfer vertex data
+		for (i = 0; i < vertexCount; i++) {
+			tempVertex = mesh->getVertex(i)->position;
+			vertexBuffer[i * 3] = tempVertex->x;
+			vertexBuffer[i * 3 + 1] = tempVertex->y;
+			vertexBuffer[i * 3 + 2] = tempVertex->z;
+		}
+
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glVertexPointer(3, GL_FLOAT, 0, vertexBuffer);
+		glDisableClientState(GL_VERTEX_ARRAY);
 	}
 
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glVertexPointer(3, GL_FLOAT, 0, vertexBuffer);
-	glDisableClientState(GL_VERTEX_ARRAY);
+	// create the edge indices if not done so already
+	if (drawMode == WIREFRAME || drawMode == SOLID_AND_WIREFRAME) {
+		if (!indexEdgeBuffer) {
+			printf("Building the edge index buffer...\n");
 
-	switch (drawMode) {
-	case POINT:
-		break;
+			indexEdgeCount = mesh->getHalfEdgeCount();
+			indexEdgeBuffer = new GLushort[indexEdgeCount];
+			node = mesh->getListHead();
+			for (i = 0; i < indexEdgeCount && node; node = node->next) {
+				// take the first half edge of each twin pair
 
-	case WIREFRAME:
-		indexCount = mesh->getHalfEdgeCount();
-		indexBuffer = new GLushort[indexCount];
-		node = mesh->getListHead();
-		for (i = 0; i < indexCount && node; node=node->next) {
-			// take the first half edge of each twin pair
-			
-			// has its pair been allocated?
-			if (trackEdge.find(node->item.pair) != trackEdge.end())
-				continue;
+				// has its pair been allocated?
+				if (trackEdge.find(node->item.pair) != trackEdge.end())
+					continue;
 
-			// allocate this edge
-			indexBuffer[i * 2] = node->item.origin->position->id;
-			indexBuffer[i * 2 + 1] = node->item.pair->origin->position->id;
+				// allocate this edge
+				indexEdgeBuffer[i * 2] = node->item.origin->position->id;
+				indexEdgeBuffer[i * 2 + 1] = node->item.pair->origin->position->id;
 
-			// add this into the set
-			trackEdge.insert(&(node->item));
-			i++;
+				// add this into the set
+				trackEdge.insert(&(node->item));
+				i++;
+			}
 		}
-		break;
+	}
 
-	case SMOOTH:
-		indexCount = mesh->getFaceCount() * 3; // Each face has 3 indices
-		indexBuffer = new GLushort[indexCount];
-		
-		for (i = 0; i < mesh->getFaceCount(); i++) {
-			curFace = mesh->getFace(i);
-			curEdge = curFace->edge;
+	// create the face indices/normal buffers if not done so already
+	if (drawMode == SOLID || drawMode == SOLID_AND_WIREFRAME) {
+		if (!indexBuffer) {
+			printf("Building the face index buffer...\n");
 
-			// Set the indices
-			indexBuffer[i * 3] = curEdge->origin->position->id;
-			curEdge = curEdge->next;
+			indexCount = mesh->getFaceCount() * 3; // Each face has 3 indices
+			indexBuffer = new GLushort[indexCount];
 
-			indexBuffer[i * 3+1] = curEdge->origin->position->id;
-			curEdge = curEdge->next;
+			for (i = 0; i < mesh->getFaceCount(); i++) {
+				curFace = mesh->getFace(i);
+				curEdge = curFace->edge;
 
-			indexBuffer[i * 3+2] = curEdge->origin->position->id;
-		}
+				// Set the indices
+				indexBuffer[i * 3] = curEdge->origin->position->id;
+				curEdge = curEdge->next;
 
-		normalCount = mesh->getVertexCount()*3;
-		normalBuffer = new GLfloat[normalCount];
+				indexBuffer[i * 3 + 1] = curEdge->origin->position->id;
+				curEdge = curEdge->next;
 
-		// each vertex will have its normal information
-		for (i = 0; i < mesh->getVertexCount(); i++) {
-			tempVertex = &(mesh->getVertex(i)->normal);
-			normalBuffer[i * 3] = tempVertex->x;
-			normalBuffer[i * 3 + 1] = tempVertex->y;
-			normalBuffer[i * 3 + 2] = tempVertex->z;
+				indexBuffer[i * 3 + 2] = curEdge->origin->position->id;
+			}
 		}
 
-		glEnableClientState(GL_NORMAL_ARRAY);
-		glNormalPointer(GL_FLOAT, 0, normalBuffer);
-		glDisableClientState(GL_NORMAL_ARRAY);
-		break;
+		if(!normalBuffer) {
+			printf("Building the normals buffer...\n");
+
+			normalCount = mesh->getVertexCount() * 3;
+			normalBuffer = new GLfloat[normalCount];
+
+			// each vertex will have its normal information
+			for (i = 0; i < mesh->getVertexCount(); i++) {
+				tempVertex = &(mesh->getVertex(i)->normal);
+				normalBuffer[i * 3] = tempVertex->x;
+				normalBuffer[i * 3 + 1] = tempVertex->y;
+				normalBuffer[i * 3 + 2] = tempVertex->z;
+			}
+
+			glEnableClientState(GL_NORMAL_ARRAY);
+			glNormalPointer(GL_FLOAT, 0, normalBuffer);
+			glDisableClientState(GL_NORMAL_ARRAY);
+		}
 	}
 	
 }
