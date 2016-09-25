@@ -14,10 +14,10 @@
 #include "HalfEdge.h"
 #include "Vector3D.h"
 #include "Light.h"
+#include "Material.h"
 
 #define LIGHTS_AVAILABLE 2
 
-enum DRAWMODE { WIREFRAME=0, POINT=1, SOLID=2, SOLID_AND_WIREFRAME=3 };
 enum SHADEMODE { FLAT, SMOOTH };
 
 void cleanup();
@@ -31,7 +31,5 @@ void loadMesh(const char* filename);
 void unloadMesh();
 void applyLights();
 void drawMesh(double);
-void setDrawMode(DRAWMODE newDrawMode);
-void clearBuffers();
 
 #endif

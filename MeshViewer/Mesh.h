@@ -3,9 +3,19 @@
 
 #include <vector>
 #include <map>
+#include <set>
 #include "LinkedList.h"
 #include "HalfEdge.h"
 #include "MFile.h"
+#include "Material.h"
+
+enum MeshDrawMode {
+	NO_DRAW = 0x0,
+	POINT = 0x1,
+	SOLID = 0x2,
+	WIREFRAME = 0x4,
+	SOLID_AND_WIREFRAME = 0x6
+};
 
 typedef struct {
 	int u;
@@ -41,8 +51,11 @@ public:
 		float radius;
 	} boundingSphere;
 
-protected:
-	void generateHalfEdges();
+	Material* getMaterial();
+
+	void render(MeshDrawMode drawMode);
+	static Mesh* loadFromFile(const char* filename);
+
 
 private:
 	LinkedList<HEEdge> *edges;
@@ -54,6 +67,15 @@ private:
 
 	int loaded;
 	MFile* mfile;
+	Material material;
+
+	GLfloat *vertexBuffer, *normalBuffer;
+	GLushort *indexBuffer, *indexEdgeBuffer;
+	MeshDrawMode currentDrawMode;
+
+	int indexCount, indexEdgeCount, vertexCount, normalCount;
+	void generateHalfEdges();
+	void generateBuffers();
 };
 
 
