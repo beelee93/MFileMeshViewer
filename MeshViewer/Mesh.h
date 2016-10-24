@@ -10,11 +10,11 @@
 #include "Material.h"
 
 enum MeshDrawMode {
-	NO_DRAW = 0x0,
-	POINT = 0x1,
-	SOLID = 0x2,
-	WIREFRAME = 0x4,
-	SOLID_AND_WIREFRAME = 0x6
+	MD_NO_DRAW = 0x0,
+	MD_POINT = 0x1,
+	MD_SOLID = 0x2,
+	MD_WIREFRAME = 0x4,
+	MD_SOLID_AND_WIREFRAME = 0x6
 };
 
 typedef struct {

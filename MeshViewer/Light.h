@@ -1,7 +1,7 @@
 #ifndef _LIGHT_H
 #define _LIGHT_H
 
-#include "lib/glut.h"
+#include <gl/glut.h>
 
 class Light {
 public:

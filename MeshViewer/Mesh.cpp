@@ -21,7 +21,7 @@ Mesh::Mesh(MFile* rawMeshData) {
 
 	vertexBuffer = normalBuffer = NULL;
 	indexBuffer = indexEdgeBuffer = NULL;
-	currentDrawMode = NO_DRAW;
+	currentDrawMode = MD_NO_DRAW;
 
 	loaded = 0;
 	if (!rawMeshData || !rawMeshData->isLoaded())
@@ -63,8 +63,8 @@ Mesh::Mesh(MFile* rawMeshData) {
 
 	printf("Mesh: Generated Half Edge Data!\n");
 	printf("Mesh: Vertices\t:%d\n", getVertexCount());
-	printf("Mesh: Faces\t\t:%d\n", getFaceCount());
-	printf("Mesh: Edges\t\t:%d\n", getHalfEdgeCount() / 2);
+	printf("Mesh: Faces\t:%d\n", getFaceCount());
+	printf("Mesh: Edges\t:%d\n", getHalfEdgeCount() / 2);
 	printf("Mesh: Euler characteristic: %d\n", getVertexCount() - getHalfEdgeCount() / 2 + getFaceCount());
 
 	// so prevent disposing the raw vertex data
@@ -74,8 +74,9 @@ Mesh::Mesh(MFile* rawMeshData) {
 	computeNormals();
 	printf("Mesh: Normals computed.\n");
 
-
 	generateBuffers();
+
+	loaded = 1;
 }
 
 void Mesh::generateHalfEdges() {
@@ -87,7 +88,7 @@ void Mesh::generateHalfEdges() {
 
 	MappingKey curKey, prevKey;
 
-	HEEdge *curEdge, *prevEdge, tempEdge;
+	HEEdge *curEdge, *prevEdge;
 
 	HEFace* curFace;
 	MFace* mface;
@@ -209,7 +210,7 @@ void Mesh::generateHalfEdges() {
 	boundingBox.maxY = boundingBox.minY = vertTemp->position->y;
 	boundingBox.maxZ = boundingBox.minZ = vertTemp->position->z;
 
-	for (int k = 1; k < vertices->size(); k++) {
+	for (int k = 1; k < (int)vertices->size(); k++) {
 		vertTemp = &(vertices->at(k));
 		if (vertTemp->position->x < boundingBox.minX)
 			boundingBox.minX = vertTemp->position->x;
@@ -245,7 +246,7 @@ void Mesh::computeNormals() {
 	HEVertex* tempVerts[3];
 
 	// first, compute the face normals
-	for (i = 0; i < faces->size(); i++) {
+	for (i = 0; i < (int)faces->size(); i++) {
 		tempFace = &(faces->at(i));
 		
 		tempEdge = tempFace->edge;
@@ -269,7 +270,7 @@ void Mesh::computeNormals() {
 
 	// now take each vertex and average the normals 
 	// of all its adjacent faces
-	for (i = 0; i < vertices->size(); i++) {
+	for (i = 0; i < (int)vertices->size(); i++) {
 		tempVerts[0] = &(vertices->at(i));
 		startEdge = tempEdge = tempVerts[0]->edge;
 
@@ -386,7 +387,7 @@ void Mesh::generateBuffers() {
 // keeps track of previously rendered mesh so rendering the 
 // same mesh need not invoke change of buffer pointer.
 void Mesh::render(MeshDrawMode drawMode) {
-	if (drawMode == NO_DRAW)
+	if (drawMode == MD_NO_DRAW)
 		return;
 
 	glEnableClientState(GL_VERTEX_ARRAY);
@@ -408,14 +409,14 @@ void Mesh::render(MeshDrawMode drawMode) {
 		glDrawArrays(GL_POINTS, 0, vertexCount);
 	}
 	else {
-		if (drawMode & MeshDrawMode::SOLID) {
+		if (drawMode & MeshDrawMode::MD_SOLID) {
 			this->getMaterial()->applyMaterial();
 
 			glEnable(GL_LIGHTING);
 			glEnableClientState(GL_NORMAL_ARRAY);
 
 			// draw the faces. enable polygon offset of a frame is drawn over it
-			if (drawMode & MeshDrawMode::WIREFRAME) {
+			if (drawMode & MeshDrawMode::MD_WIREFRAME) {
 				glEnable(GL_POLYGON_OFFSET_FILL);
 				glPolygonOffset(1.0f, 1.0f);
 				glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, indexBuffer);
@@ -428,7 +429,7 @@ void Mesh::render(MeshDrawMode drawMode) {
 			glDisable(GL_LIGHTING);
 		}
 
-		if (drawMode & MeshDrawMode::WIREFRAME) {
+		if (drawMode & MeshDrawMode::MD_WIREFRAME) {
 			// draw the frame
 			glDisable(GL_LIGHTING);
 			glColor3f(0, 0.85f, 0);
@@ -443,20 +444,25 @@ void Mesh::render(MeshDrawMode drawMode) {
 }
 
 Mesh::~Mesh() {
-	delete edges;
-	delete faces;
-	delete vertices;
-	delete rawVertices;
-	
+
 	delete[] vertexBuffer;
 	delete[] normalBuffer;
 	delete[] indexBuffer;
 	delete[] indexEdgeBuffer;
 
+	vertexBuffer = normalBuffer = NULL;
+	indexBuffer = indexEdgeBuffer = NULL;
+
+	delete faces;
+	delete vertices;
+	delete edges;
+	delete rawVertices;
+
 	edges = NULL;
 	faces = NULL;
 	vertices = NULL;
 	rawVertices = NULL;
+
 }
 
 // loads a mesh from file. returns the pointer to the 
