@@ -145,6 +145,7 @@
     <ClCompile Include="Material.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="MFile.cpp" />
+    <ClCompile Include="MouseHandling.cpp" />
     <ClCompile Include="Vector3d.cpp" />
   </ItemGroup>
   <ItemGroup>

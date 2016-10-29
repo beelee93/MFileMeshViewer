@@ -14,8 +14,13 @@ void Camera::render() {
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	if (ortho)
-		gluOrtho2D(0, viewportWidth, viewportHeight, 0);
+	if (ortho) {
+		Vector3d temp = eye - lookAt;
+		double d = temp.length();
+		double w2 = d * tan(perspectiveFOV / 360 * 3.141592);
+		double h2 = (double)viewportHeight / viewportWidth * w2;
+		glOrtho(-w2, w2, -h2, h2, 1, 100000);
+	}
 	else 
 		gluPerspective(perspectiveFOV, (double)viewportWidth / viewportHeight, 1, 100000);
 	
