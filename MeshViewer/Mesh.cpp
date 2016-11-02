@@ -1,4 +1,5 @@
 #include "Mesh.h"
+#include <time.h>
 using namespace std;
 
 typedef bool(*KEY_COMP_FN)(MappingKey, MappingKey);
@@ -80,41 +81,66 @@ Mesh::Mesh(MFile* rawMeshData) {
 }
 
 void Mesh::generateHalfEdges() {
+	clock_t cprev = clock();
 	// stores reference to already created Half edges
 	typedef map<MappingKey, HEEdge*, KEY_COMP_FN> Map;
 	Map hemap(key_comp);
 
-	Map::iterator it;
+	Map::iterator it, it2;
 
 	MappingKey curKey, prevKey;
 
-	HEEdge *curEdge, *prevEdge;
+	HEEdge *curEdge, *prevEdge, *pairEdge, *firstEdge;
 
 	HEFace* curFace;
 	MFace* mface;
-	int i, j, u, v;
+	int i, j, u, v, *indices;
+	int fcount = mfile->getFaceCount();
 
 	vector<HEEdge>::iterator itEdge;
 
-	// iterate for every face
-	for (i = 0; i < mfile->getFaceCount(); i++) {
-		curFace = &(faces->at(i));
-		mface = mfile->getFace(i);
+	// iterate every face 
+	for (i = fcount; i--;) {
+		curFace = &(faces->at(i)); // reference to the current face
+		indices = mfile->getFace(i)->indices;
 
-		// iterate for every edge on this face
-		for (j = 0; j < 3; j++) {
-			u = j;
-			v = (j + 1) % 3;
+		// iterate for every edge
+		for (j = 3; j--;) {
+			u = (2-j);
+			v = (u + 1) % 3;
 
-			curKey.u = mface->indices[u];  // origin vertex index
-			curKey.v = mface->indices[v];  // dest vertex index
+			// is there already such an edge?
+			curKey.u = indices[u];  // origin vertex index
+			curKey.v = indices[v];  // dest vertex index
+			it = hemap.find(curKey);
 
-			// create a new half edge for this 
-			curEdge = &(edges->put(HEEdge())->item);
-			curEdge->face = curFace;
-			curEdge->origin = &(vertices->at(curKey.u));
-			curEdge->next = curEdge->prev = NULL;
-			curEdge->pair = NULL;
+			if (it != hemap.end()) {
+				// there is such a half edge
+				curEdge = it->second;
+			}
+			else {
+				// no such half edge, so create the pair
+				curEdge = &(edges->put(HEEdge())->item);
+				pairEdge = &(edges->put(HEEdge())->item);
+
+				curEdge->face = curFace;
+				curEdge->origin = &(vertices->at(curKey.u));
+				curEdge->next = curEdge->prev = NULL;
+				curEdge->pair = pairEdge; // pair
+
+				pairEdge->face = NULL;
+				pairEdge->origin = &(vertices->at(curKey.v));
+				pairEdge->next = pairEdge->prev = NULL;
+				pairEdge->pair = curEdge; // pair
+
+			    // put the pair half edge into the mapping
+				prevKey.u = curKey.v;
+				prevKey.v = curKey.u;
+				hemap.insert(pair<MappingKey, HEEdge*>(MappingKey(prevKey), pairEdge));
+			}
+
+			// keep the reference to the first half edge for last link later
+			if(j==2) firstEdge = curEdge;
 
 			// a face needs to have an edge for it
 			if (!curFace->edge)
@@ -125,84 +151,51 @@ void Mesh::generateHalfEdges() {
 			if (!curEdge->origin->edge)
 				curEdge->origin->edge = curEdge;
 
-			// put this half edge into the mapping
-			hemap.insert(pair<MappingKey, HEEdge*>(MappingKey(curKey), curEdge));
-
-			// check if its pair exists
-			curKey.u = mface->indices[v];
-			curKey.v = mface->indices[u];
-
-			if ((it = hemap.find(curKey)) != hemap.end()) {
-				// set them to pair up
-				prevEdge = it->second;
-
-				prevEdge->pair = curEdge;
-				curEdge->pair = prevEdge;
+			// we can begin linking on 2nd iteration
+			if (j < 2) {
+				prevEdge->next = curEdge;
+				curEdge->prev = prevEdge;
 			}
+
+			// keep reference for this half edge for next iteration
+			prevEdge = curEdge;
 		}
 
-		// link them in clockwise manner
-		for (j = 0; j < 3; j++) {
-			u = (j + 1) % 3;
-			v = (j == 0 ? 2 : j - 1);
-
-			curKey.u = mface->indices[j];
-			curKey.v = mface->indices[u];
-
-			prevKey.u = mface->indices[v];
-			prevKey.v = mface->indices[j];
-
-			it = hemap.find(curKey);
-			curEdge = it->second;
-
-			it = hemap.find(prevKey);
-			prevEdge = it->second;
-
-			curEdge->prev = prevEdge;
-			prevEdge->next = curEdge;
-		}
+		// one last link
+		curEdge->next = firstEdge;
+		firstEdge->prev = curEdge;
 	}
-	
+
 	// upon reaching here, all faces have been stitched together
 	// now to create boundary half edges
-	map<int, HEEdge*> bhemap; // mapping of VertexIndex -> HE that leads to it
-    
-	// go thru all half edges and determine those without a pair
-	it = hemap.begin();
-	while (it != hemap.end()) {
-		curEdge = it->second;
-
-		if (!curEdge->pair) {
-			// has no pair, so create one
-			prevEdge = &(edges->put(HEEdge())->item);
-			prevEdge->face = NULL;
-			prevEdge->next = NULL;
-			prevEdge->prev = NULL;
-
-			// pairing
-			prevEdge->pair = curEdge;
-			curEdge->pair = prevEdge;
-
-			prevEdge->origin = curEdge->next->origin;
-			bhemap.insert(pair<int, HEEdge*>(curEdge->origin->position->id, prevEdge));
-		}
-			
-		it++;
-	}
-
-	// now link up all the boundary half edges
-	map<int, HEEdge*>::iterator it2 = bhemap.begin(), it3;
-	while (it2 != bhemap.end()) {
+	
+	it2 = hemap.begin();
+	while (it2 != hemap.end()) {
+		// does this half edge have its prev set?
 		curEdge = it2->second;
-		
-		it3 = bhemap.find(curEdge->origin->position->id);
-		prevEdge = it3->second;
+		if (curEdge->prev) {
+			it2++;
+			continue;
+		}
 
+		// prev is not set, so, let's find it's prev
+		prevEdge = curEdge->pair;
+		while (prevEdge->next) {
+			// this edge is in a link (hence, it's a valid face)
+			prevEdge = prevEdge->next->pair;
+		}
+
+		// reaching here, prevEdge has no next
 		prevEdge->next = curEdge;
 		curEdge->prev = prevEdge;
 
 		it2++;
 	}
+	
+	// upon reaching here, all boundary edges have been stitched together
+	clock_t b = clock() - cprev;
+	printf("Time taken: %.2f s\n", (double)b / CLOCKS_PER_SEC);
+
 
 	// compute bounding box/sphere
 	HEVertex* vertTemp = &(vertices->at(0));
@@ -246,7 +239,7 @@ void Mesh::computeNormals() {
 	HEVertex* tempVerts[3];
 
 	// first, compute the face normals
-	for (i = 0; i < (int)faces->size(); i++) {
+	for (i = (int)faces->size(); i--;) {
 		tempFace = &(faces->at(i));
 		
 		tempEdge = tempFace->edge;
@@ -270,7 +263,7 @@ void Mesh::computeNormals() {
 
 	// now take each vertex and average the normals 
 	// of all its adjacent faces
-	for (i = 0; i < (int)vertices->size(); i++) {
+	for (i = (int)vertices->size(); i--; ) {
 		tempVerts[0] = &(vertices->at(i));
 		startEdge = tempEdge = tempVerts[0]->edge;
 
@@ -302,7 +295,6 @@ void Mesh::generateBuffers() {
 	int i;
 	Vector3d *tempVertex;
 	ListNode<HEEdge>* node;
-	std::set<HEEdge*> trackEdge;
 	HEFace* curFace;
 	HEEdge* curEdge;
 
@@ -322,6 +314,7 @@ void Mesh::generateBuffers() {
 
 	}
 
+	
 	if (!indexEdgeBuffer) {
 		printf("Mesh: Building the edge index buffer...\n");
 
@@ -329,22 +322,16 @@ void Mesh::generateBuffers() {
 		indexEdgeBuffer = new GLushort[indexEdgeCount];
 		node = getListHead();
 
-		for ( i = 0; i < indexEdgeCount && node; node = node->next) {
+		for (i = 0; i < (indexEdgeCount>>1) && node; i++) {
 			// take the first half edge of each twin pair
-
-			// has its pair been allocated?
-			if (trackEdge.find(node->item.pair) != trackEdge.end())
-				continue;
-
-			// allocate this edge
 			indexEdgeBuffer[i * 2] = node->item.origin->position->id;
 			indexEdgeBuffer[i * 2 + 1] = node->item.pair->origin->position->id;
 
-			// add this into the set
-			trackEdge.insert(&(node->item));
-			i++;
+			node = node->next;
+			if (node) node = node->next;
 		}
 	}
+	
 
 	if (!indexBuffer) {
 		printf("Mesh: Building the face index buffer...\n");
@@ -352,7 +339,7 @@ void Mesh::generateBuffers() {
 		indexCount = this->getFaceCount() * 3; // Each face has 3 indices
 		indexBuffer = new GLushort[indexCount];
 
-		for (i = 0; i < getFaceCount(); i++) {
+		for (i = getFaceCount(); i--;) {
 			curFace = getFace(i);
 			curEdge = curFace->edge;
 
@@ -374,7 +361,7 @@ void Mesh::generateBuffers() {
 		normalBuffer = new GLfloat[normalCount];
 
 		// each vertex will have its normal information
-		for (i = 0; i < getVertexCount(); i++) {
+		for (i = getVertexCount(); i--;) {
 			tempVertex = &(getVertex(i)->normal);
 			normalBuffer[i * 3] = tempVertex->x;
 			normalBuffer[i * 3 + 1] = tempVertex->y;
