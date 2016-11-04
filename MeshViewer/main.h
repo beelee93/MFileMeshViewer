@@ -1,6 +1,8 @@
 #ifndef _MAIN_H
 #define _MAIN_H
 
+#pragma comment( lib, "glut32.lib" )
+
 #include <stdio.h>
 #include <string.h>
 #include <vector>
@@ -8,7 +10,6 @@
 #include <commdlg.h>
 #include <time.h>
 #include <gl/glut.h>
-#include "lib/glui.h"
 #include "LinkedList.h"
 #include "MFile.h"
 #include "Mesh.h"
