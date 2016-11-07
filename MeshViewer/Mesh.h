@@ -22,6 +22,11 @@ typedef struct {
 	int v;
 } MappingKey;
 
+typedef struct {
+	float minX, minY, minZ;
+	float maxX, maxY, maxZ;
+} BoundingBox;
+
 bool key_comp(MappingKey a, MappingKey b);
 
 class Mesh {
@@ -41,10 +46,7 @@ public:
 	HEFace* getFace(int index);
 	HEVertex* getVertex(int index);
 
-	struct {
-		float minX, minY, minZ;
-		float maxX, maxY, maxZ;
-	} boundingBox;
+	BoundingBox boundingBox;
 
 	struct {
 		Vector3d center;
@@ -54,7 +56,7 @@ public:
 	Material* getMaterial();
 
 	void render(MeshDrawMode drawMode);
-	static Mesh* loadFromFile(const char* filename);
+	static Mesh* loadFromFile(const char* filename, MFile** outFile);
 
 
 private:

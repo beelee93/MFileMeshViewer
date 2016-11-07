@@ -378,16 +378,9 @@ void Mesh::render(MeshDrawMode drawMode) {
 		return;
 
 	glEnableClientState(GL_VERTEX_ARRAY);
-
-	if (lastRenderedMesh != this) {
-		// different mesh, so reapply buffers
-		
-		glVertexPointer(3, GL_FLOAT, 0, vertexBuffer);
-
-		glEnableClientState(GL_NORMAL_ARRAY);
-		glNormalPointer(GL_FLOAT, 0, normalBuffer);
-		glDisableClientState(GL_NORMAL_ARRAY);
-	}
+	glVertexPointer(3, GL_FLOAT, 0, vertexBuffer);
+	glEnableClientState(GL_NORMAL_ARRAY);
+	glNormalPointer(GL_FLOAT, 0, normalBuffer);
 
 	// rendering
 	if (drawMode & 0x1) {
@@ -400,7 +393,6 @@ void Mesh::render(MeshDrawMode drawMode) {
 			this->getMaterial()->applyMaterial();
 
 			glEnable(GL_LIGHTING);
-			glEnableClientState(GL_NORMAL_ARRAY);
 
 			// draw the faces. enable polygon offset of a frame is drawn over it
 			if (drawMode & MeshDrawMode::MD_WIREFRAME) {
@@ -412,7 +404,6 @@ void Mesh::render(MeshDrawMode drawMode) {
 			else
 				glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, indexBuffer);
 
-			glDisableClientState(GL_NORMAL_ARRAY);
 			glDisable(GL_LIGHTING);
 		}
 
@@ -426,8 +417,8 @@ void Mesh::render(MeshDrawMode drawMode) {
 		}
 	}
 	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_NORMAL_ARRAY);
 
-	lastRenderedMesh = this;
 }
 
 Mesh::~Mesh() {
@@ -455,7 +446,7 @@ Mesh::~Mesh() {
 // loads a mesh from file. returns the pointer to the 
 // loaded mesh. If failed, a nullptr is returned.
 // be sure to delete the returned pointer
-Mesh* Mesh::loadFromFile(const char* filename) {
+Mesh* Mesh::loadFromFile(const char* filename, MFile** outFile) {
 	printf("Mesh: Loading from file %s\n", filename);
 
 	MFile* file = new MFile(filename);
@@ -464,9 +455,13 @@ Mesh* Mesh::loadFromFile(const char* filename) {
 	if (file->isLoaded()) {
 		printf("Mesh: File loaded. Building half edge structure...\n");
 		mesh = new Mesh(file);
+		*outFile = file;
 	}
-
-	delete file;
+	else
+	{
+		delete file;
+		(*outFile) = NULL;
+	}
 
 	return mesh;
 }

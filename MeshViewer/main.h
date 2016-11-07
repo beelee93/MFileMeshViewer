@@ -41,6 +41,7 @@ void onKey(unsigned char key, int x, int y);
 void update(double elapsed);
 void draw(double elapsed);
 void drawAxes(double length, int ignoreDepthTest = 0);
+void drawBoundingBox();
 void drawOverlayAxes();
 void drawPlane(double inc, int halfgridcount);
 void loadMesh(const char* filename);

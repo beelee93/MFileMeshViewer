@@ -8,6 +8,7 @@ static Camera* camera;
 static int viewport[2] = { 800, 800 };
 
 static Mesh *mesh = NULL;
+static MFile *mfile = NULL;
 
 static int meshVisible = 1;
 
@@ -17,6 +18,7 @@ static MeshDrawMode renderMode = MeshDrawMode::MD_SOLID;
 static GLfloat drawColor[3] = { 1, 1, 1 };
 static bool enableDrawGrid = true;
 static bool enableDrawAxes = true;
+static bool enableDrawBBox = true;
 
 // lighting
 static int lightingEnabled = 1;
@@ -160,7 +162,11 @@ void onKey(unsigned char key, int x, int y) {
 		/********** Toggle Axis **********/
 		enableDrawAxes = !enableDrawAxes;
 		break;
-
+	case 'B':
+	case 'b':
+		/********** Toggle BBox **********/
+		enableDrawBBox = !enableDrawBBox;
+		break;
 
 	case 'C':
 	case 'c': 
@@ -205,6 +211,58 @@ void onKey(unsigned char key, int x, int y) {
 // ======================================================
 void update(double elapsed) {
 
+}
+
+// ======================================================
+// Draws the bounding box over existing mesh
+// ======================================================
+void drawBoundingBox() {
+	if (!mesh)
+		return;
+
+	BoundingBox &bb = mesh->boundingBox;
+
+	glLineWidth(2.0f);
+	glColor3d(0, 0, 0);
+	glBegin(GL_LINES);
+	glVertex3d(bb.minX, bb.minY, bb.minZ);
+	glVertex3d(bb.maxX, bb.minY, bb.minZ);
+
+	glVertex3d(bb.maxX, bb.minY, bb.minZ);
+	glVertex3d(bb.maxX, bb.maxY, bb.minZ);
+
+	glVertex3d(bb.maxX, bb.maxY, bb.minZ);
+	glVertex3d(bb.minX, bb.maxY, bb.minZ);
+	
+	glVertex3d(bb.minX, bb.maxY, bb.minZ);
+	glVertex3d(bb.minX, bb.minY, bb.minZ);
+
+	glVertex3d(bb.minX, bb.minY, bb.maxZ);
+	glVertex3d(bb.maxX, bb.minY, bb.maxZ);
+
+	glVertex3d(bb.maxX, bb.minY, bb.maxZ);
+	glVertex3d(bb.maxX, bb.maxY, bb.maxZ);
+
+	glVertex3d(bb.maxX, bb.maxY, bb.maxZ);
+	glVertex3d(bb.minX, bb.maxY, bb.maxZ);
+
+	glVertex3d(bb.minX, bb.maxY, bb.maxZ);
+	glVertex3d(bb.minX, bb.minY, bb.maxZ);
+
+	glVertex3d(bb.minX, bb.minY, bb.minZ);
+	glVertex3d(bb.minX, bb.minY, bb.maxZ);
+
+	glVertex3d(bb.minX, bb.maxY, bb.minZ);
+	glVertex3d(bb.minX, bb.maxY, bb.maxZ);
+
+	glVertex3d(bb.maxX, bb.minY, bb.minZ);
+	glVertex3d(bb.maxX, bb.minY, bb.maxZ);
+
+	glVertex3d(bb.maxX, bb.maxY, bb.minZ);
+	glVertex3d(bb.maxX, bb.maxY, bb.maxZ);
+
+	glEnd();
+	glLineWidth(1.0f);
 }
 
 // ======================================================
@@ -368,7 +426,6 @@ void processGesture(int x, int y, int gesture, int button) {
 
 		if (gestureSampleCount >= 2) {
 			temp = adjustToDistance();
-			printf("%lf\n", temp);
 			deltaY = (y - gestureLastMouse[1]) * ZOOM_SENSITIVITY * temp;
 			tempVect = camera->eye - (vzoom * deltaY);
 			tempVect2 = camera->eye - camera->lookAt;
@@ -401,6 +458,9 @@ void draw(double elapsed) {
 	
 	glEnable(GL_DEPTH_TEST);
 	drawMesh(elapsed);
+	// draw bbox
+	if (enableDrawBBox)
+		drawBoundingBox();
 
 	if(enableDrawGrid)
 		drawPlane(10, 5);
@@ -579,7 +639,11 @@ void loadMesh(const char* filename) {
 
 	// mesh should be null
 	_ASSERT(mesh == NULL);
-	mesh = Mesh::loadFromFile(filename);
+	mesh = Mesh::loadFromFile(filename, &mfile);
+	if (!mesh) {
+		printf("main: There was an error loading the MFile\n");
+		return;
+	}
 	if (!mesh->isLoaded())
 	{
 		delete mesh;
@@ -603,6 +667,10 @@ void unloadMesh() {
 		delete mesh;
 		mesh = NULL;
 		printf("Disposed mesh\n");
+	}
+	if (mfile != NULL) {
+		delete mfile;
+		mfile = NULL;
 	}
 }
 
